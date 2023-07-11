@@ -20,7 +20,7 @@ type ServerConfig struct {
 	paramDecoders map[reflect.Type]ParamDecoder
 	errors        *Errors
 
-	reverseClientBuilder func(context.Context, *wsConn) (context.Context, error)
+	reverseClientBuilder func(context.Context, *WsConn) (context.Context, error)
 }
 
 type ServerOption func(c *ServerConfig)
@@ -62,7 +62,7 @@ func WithServerPingInterval(d time.Duration) ServerOption {
 // RP is a proxy-struct type, much like the one passed to NewClient.
 func WithReverseClient[RP any](namespace string) ServerOption {
 	return func(c *ServerConfig) {
-		c.reverseClientBuilder = func(ctx context.Context, conn *wsConn) (context.Context, error) {
+		c.reverseClientBuilder = func(ctx context.Context, conn *WsConn) (context.Context, error) {
 			cl := client{
 				namespace:     namespace,
 				paramEncoders: map[reflect.Type]ParamEncoder{},

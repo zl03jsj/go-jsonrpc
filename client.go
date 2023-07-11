@@ -240,7 +240,7 @@ func websocketClient(ctx context.Context, addr string, namespace string, outs []
 		hnd = h
 	}
 
-	wconn := &wsConn{
+	wconn := &WsConn{
 		conn:             conn,
 		connFactory:      connFactory,
 		reconnectBackoff: config.reconnectBackoff,

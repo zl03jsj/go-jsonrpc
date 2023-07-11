@@ -49,7 +49,7 @@ type reqestHandler interface {
 	handle(ctx context.Context, req request, w func(func(io.Writer)), rpcError rpcErrFunc, done func(keepCtx bool), chOut chanOut)
 }
 
-type wsConn struct {
+type WsConn struct {
 	// outside params
 	conn             *websocket.Conn
 	connFactory      func() (*websocket.Conn, error)
@@ -112,7 +112,7 @@ type chanHandler struct {
 //                         //
 
 // nextMessage wait for one message and puts it to the incoming channel
-func (c *wsConn) nextMessage() {
+func (c *WsConn) nextMessage() {
 	c.resetReadDeadline()
 	msgType, r, err := c.conn.NextReader()
 	if err != nil {
@@ -130,7 +130,7 @@ func (c *wsConn) nextMessage() {
 
 // nextWriter waits for writeLk and invokes the cb callback with WS message
 // writer when the lock is acquired
-func (c *wsConn) nextWriter(cb func(io.Writer)) {
+func (c *WsConn) nextWriter(cb func(io.Writer)) {
 	c.writeLk.Lock()
 	defer c.writeLk.Unlock()
 
@@ -148,7 +148,7 @@ func (c *wsConn) nextWriter(cb func(io.Writer)) {
 	}
 }
 
-func (c *wsConn) sendRequest(req request) error {
+func (c *WsConn) sendRequest(req request) error {
 	c.writeLk.Lock()
 	defer c.writeLk.Unlock()
 
@@ -168,7 +168,7 @@ func (c *wsConn) sendRequest(req request) error {
 
 // handleOutChans handles channel communication on the server side
 // (forwards channel messages to client)
-func (c *wsConn) handleOutChans() {
+func (c *WsConn) handleOutChans() {
 	regV := reflect.ValueOf(c.registerCh)
 	exitV := reflect.ValueOf(c.exiting)
 
@@ -283,7 +283,7 @@ func (c *wsConn) handleOutChans() {
 }
 
 // handleChanOut registers output channel for forwarding to client
-func (c *wsConn) handleChanOut(ch reflect.Value, req interface{}) error {
+func (c *WsConn) handleChanOut(ch reflect.Value, req interface{}) error {
 	c.spawnOutChanHandlerOnce.Do(func() {
 		go c.handleOutChans()
 	})
@@ -313,7 +313,7 @@ func (c *wsConn) handleChanOut(ch reflect.Value, req interface{}) error {
 //	This should also probably be a single goroutine,
 //	Note that not doing this should be fine for now as long as we are using
 //	contexts correctly (cancelling when async functions are no longer is use)
-func (c *wsConn) handleCtxAsync(actx context.Context, id interface{}) {
+func (c *WsConn) handleCtxAsync(actx context.Context, id interface{}) {
 	<-actx.Done()
 
 	rp, err := json.Marshal([]param{{v: reflect.ValueOf(id)}})
@@ -332,7 +332,7 @@ func (c *wsConn) handleCtxAsync(actx context.Context, id interface{}) {
 }
 
 // cancelCtx is a built-in rpc which handles context cancellation over rpc
-func (c *wsConn) cancelCtx(req frame) {
+func (c *WsConn) cancelCtx(req frame) {
 	if req.ID != nil {
 		log.Warnf("%s call with ID set, won't respond", wsCancel)
 	}
@@ -362,7 +362,7 @@ func (c *wsConn) cancelCtx(req frame) {
 // Main Handling logic //
 //                     //
 
-func (c *wsConn) handleChanMessage(frame frame) {
+func (c *WsConn) handleChanMessage(frame frame) {
 	var params []param
 	if err := json.Unmarshal(frame.Params, &params); err != nil {
 		log.Error("failed to unmarshal channel id in xrpc.ch.val: %s", err)
@@ -391,7 +391,7 @@ func (c *wsConn) handleChanMessage(frame frame) {
 	hnd.cb(params[1].data, true)
 }
 
-func (c *wsConn) handleChanClose(frame frame) {
+func (c *WsConn) handleChanClose(frame frame) {
 	var params []param
 	if err := json.Unmarshal(frame.Params, &params); err != nil {
 		log.Error("failed to unmarshal channel id in xrpc.ch.val: %s", err)
@@ -422,7 +422,7 @@ func (c *wsConn) handleChanClose(frame frame) {
 	hnd.cb(nil, false)
 }
 
-func (c *wsConn) handleResponse(frame frame) {
+func (c *WsConn) handleResponse(frame frame) {
 	c.inflightLk.Lock()
 	req, ok := c.inflight[frame.ID]
 	c.inflightLk.Unlock()
@@ -459,7 +459,7 @@ func (c *wsConn) handleResponse(frame frame) {
 	c.inflightLk.Unlock()
 }
 
-func (c *wsConn) handleCall(ctx context.Context, frame frame) {
+func (c *WsConn) handleCall(ctx context.Context, frame frame) {
 	if c.handler == nil {
 		log.Error("handleCall on client with no reverse handler")
 		return
@@ -505,7 +505,7 @@ func (c *wsConn) handleCall(ctx context.Context, frame frame) {
 }
 
 // handleFrame handles all incoming messages (calls and responses)
-func (c *wsConn) handleFrame(ctx context.Context, frame frame) {
+func (c *WsConn) handleFrame(ctx context.Context, frame frame) {
 	// Get message type by method name:
 	// "" - response
 	// "xrpc.*" - builtin
@@ -524,7 +524,7 @@ func (c *wsConn) handleFrame(ctx context.Context, frame frame) {
 	}
 }
 
-func (c *wsConn) closeInFlight() {
+func (c *WsConn) closeInFlight() {
 	c.inflightLk.Lock()
 	for id, req := range c.inflight {
 		req.ready <- clientResponse{
@@ -548,7 +548,7 @@ func (c *wsConn) closeInFlight() {
 
 }
 
-func (c *wsConn) closeChans() {
+func (c *WsConn) closeChans() {
 	c.chanHandlersLk.Lock()
 	defer c.chanHandlersLk.Unlock()
 
@@ -568,7 +568,7 @@ func (c *wsConn) closeChans() {
 	}
 }
 
-func (c *wsConn) setupPings() func() {
+func (c *WsConn) setupPings() func() {
 	if c.pingInterval == 0 {
 		return func() {}
 	}
@@ -615,7 +615,7 @@ func (c *wsConn) setupPings() func() {
 }
 
 // returns true if reconnected
-func (c *wsConn) tryReconnect(ctx context.Context) bool {
+func (c *WsConn) tryReconnect(ctx context.Context) bool {
 	if c.connFactory == nil { // server side
 		return false
 	}
@@ -658,7 +658,7 @@ func (c *wsConn) tryReconnect(ctx context.Context) bool {
 	return true
 }
 
-func (c *wsConn) readFrame(ctx context.Context, r io.Reader) {
+func (c *WsConn) readFrame(ctx context.Context, r io.Reader) {
 	// debug util - dump all messages to stderr
 	// r = io.TeeReader(r, os.Stderr)
 
@@ -680,7 +680,7 @@ func (c *wsConn) readFrame(ctx context.Context, r io.Reader) {
 	go c.nextMessage()
 }
 
-func (c *wsConn) frameExecutor(ctx context.Context) {
+func (c *WsConn) frameExecutor(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -708,7 +708,7 @@ func (c *wsConn) frameExecutor(ctx context.Context) {
 
 var maxQueuedFrames = 256
 
-func (c *wsConn) handleWsConn(ctx context.Context) {
+func (c *WsConn) handleWsConn(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -875,7 +875,7 @@ func (c *wsConn) handleWsConn(ctx context.Context) {
 var onReadDeadlineResetInterval = 5 * time.Second
 
 // autoResetReader wraps a reader and resets the read deadline on if needed when doing large reads.
-func (c *wsConn) autoResetReader(reader io.Reader) io.Reader {
+func (c *WsConn) autoResetReader(reader io.Reader) io.Reader {
 	return &deadlineResetReader{
 		r:     reader,
 		reset: c.resetReadDeadline,
@@ -902,7 +902,7 @@ func (r *deadlineResetReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (c *wsConn) resetReadDeadline() {
+func (c *WsConn) resetReadDeadline() {
 	if c.timeout > 0 {
 		if err := c.conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
 			log.Error("setting read deadline", err)

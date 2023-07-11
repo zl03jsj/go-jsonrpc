@@ -23,7 +23,7 @@ const (
 // RPCServer provides a jsonrpc 2.0 http server handler
 type RPCServer struct {
 	*handler
-	reverseClientBuilder func(context.Context, *wsConn) (context.Context, error)
+	reverseClientBuilder func(context.Context, *WsConn) (context.Context, error)
 
 	pingInterval time.Duration
 }
@@ -64,7 +64,7 @@ func (s *RPCServer) handleWS(ctx context.Context, w http.ResponseWriter, r *http
 		return
 	}
 
-	wc := &wsConn{
+	wc := &WsConn{
 		conn:         c,
 		handler:      s,
 		pingInterval: s.pingInterval,
